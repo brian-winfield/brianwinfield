@@ -794,13 +794,13 @@ function explode(pos, r = 5.5, power = 300, big = false) {
   const c = V3();
   for (const e of entities.slice()) {
     if (e.destroyed) continue;
-    const dist = e.box.distanceToPoint(pos);
-    if (dist > r) continue;
-    const f = 1 - dist / r;
+    const dist = e.box.distanceToPoint(pos), pushR = r * 2;
+    if (dist > pushR) continue;
     e.box.getCenter(c);
     const dir = c.sub(pos).normalize();
-    const killed = damage(e, power * f, pos, dir, true);
-    if (!killed && e.dynamic) { e.vel.addScaledVector(dir, 11 * f / e.mass).add(V3(0, 6 * f / e.mass, 0)); e.angVel += rnd(-6, 6) * f; e.spin.set(rnd(-6, 6), 0, rnd(-6, 6)).multiplyScalar(f); e.onGround = false; }
+    const killed = dist < r && damage(e, power * (1 - dist / r), pos, dir, true);
+    const f = 1 - dist / pushR;
+    if (!killed && e.dynamic) { e.asleep = false; e.vel.addScaledVector(dir, 14 * f / e.mass).add(V3(0, 7 * f / e.mass, 0)); e.angVel += rnd(-6, 6) * f; e.spin.set(rnd(-6, 6), 0, rnd(-6, 6)).multiplyScalar(f); e.onGround = false; }
   }
   wakeProps();
 }
@@ -1182,6 +1182,20 @@ window.__game = {
   entities, totalTargets, houses, renderer, scene, camera,
   look(y, p) { yaw = y; pitch = p; },
   lookAt(x, y, z) { const dx = x - player.pos.x, dy = y - (player.pos.y + EYE), dz = z - player.pos.z; yaw = Math.atan2(-dx, -dz); pitch = Math.atan2(dy, Math.hypot(dx, dz)); },
+  debugRay() { camera.getWorldDirection(camDir); ray.set(camera.position, camDir); ray.far = 400; return ray.intersectObjects(shootables, false).slice(0, 3).map(h => ({ d: h.distance.toFixed(2), kind: h.object.userData.entity?.kind || h.object.userData.impact, type: h.object.type, p: h.point.toArray().map(v => v.toFixed(2)) })); },
+  aimAt(i) {
+    const e = entities[i], c = e.box.getCenter(V3());
+    for (const r of [4, 6, 8, 3]) for (let k = 0; k < 16; k++) {
+      const a = k / 16 * Math.PI * 2, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+      player.pos.set(x, 0, z); setBodyBox(tmpBox, player);
+      if (hitsAny(tmpBox, null)) continue;
+      const eye = V3(x, EYE, z), dir = c.clone().sub(eye).normalize();
+      ray.set(eye, dir); ray.far = 50;
+      const h = ray.intersectObjects(shootables, false)[0];
+      if (h && h.object.userData.entity === e) { player.vel.set(0, 0, 0); this.lookAt(c.x, c.y, c.z); return true; }
+    }
+    return false;
+  },
   teleport(x, z) { player.pos.set(x, 0, z); player.vel.set(0, 0, 0); },
 };
 </script>
