@@ -863,7 +863,7 @@ const player = { pos: V3(8, 0, 1.5), vel: V3(), rx: .3, rz: .3, h: 1.75, onGroun
 let yaw = -0.25, pitch = 0, recoilP = 0, recoilY = 0, bobT = 0, aimT = 0;
 const EYE = 1.62;
 const keys = {};
-let started = false, paused = false, locked = false;
+let started = false, paused = false, locked = false, testNoLook = false;
 let triggerHeld = false, triggerPressed = false, aimHeld = false;
 
 // ---------------------------------------------------------------- weapons (view models)
@@ -939,6 +939,7 @@ function fireRifle() {
   const dir = camDir.clone().addScaledVector(camRight, Math.cos(a) * r).addScaledVector(camUp, Math.sin(a) * r).normalize();
   ray.set(camera.position, dir); ray.far = 400;
   const hit = ray.intersectObjects(shootables, false)[0];
+  shotLog.push(hit ? (hit.object.userData.entity?.kind || hit.object.userData.impact) + '@' + hit.distance.toFixed(1) : 'miss'); if (shotLog.length > 50) shotLog.shift();
   sfx.shot();
   heat = Math.min(1, heat + .18); kick = 1;
   recoilP += .011 + Math.random() * .006; recoilY += rnd(-.004, .004);
@@ -960,7 +961,7 @@ function fireRifle() {
   if (type !== 'glass') addDecal(obj, hit.point, n, 0, M.hole);
   if (e) { if (e.kind !== 'wall') showHit(); damage(e, 25, hit.point, dir, false); }
 }
-const rockets = [];
+const rockets = []; const shotLog = [];
 const rocketProto = (() => {
   const g = new THREE.Group();
   g.add(new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .55, 12).rotateX(Math.PI / 2), olive));
@@ -1022,7 +1023,8 @@ document.addEventListener('pointerlockchange', () => {
   else if (started) { paused = true; triggerHeld = false; aimHeld = false; for (const k in keys) keys[k] = false; $('sub').textContent = 'Paused'; $('go').textContent = 'CLICK TO RESUME'; overlay.style.display = 'flex'; }
 });
 document.addEventListener('mousemove', e => {
-  if (!locked || paused) return;
+  if (!locked || paused || testNoLook) return;
+  if (Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return; // browser pointer-lock spike
   const sens = .0022 * (1 - aimT * .4);
   yaw -= e.movementX * sens; pitch -= e.movementY * sens; pitch = clamp(pitch, -1.5, 1.5);
   swayV.x += e.movementX * .00004; swayV.y += e.movementY * .00004;
@@ -1178,7 +1180,7 @@ frame();
 // hook for automated tests
 window.__game = {
   get player() { return player; }, get weapons() { return weapons; }, get wi() { return wi; }, get score() { return score; },
-  get reloading() { return reloadT > 0; }, get fps() { return fps; }, get holes() { return holes.length; }, get started() { return started; }, get time() { return gameTime; }, mainStats,
+  get reloading() { return reloadT > 0; }, get fps() { return fps; }, get holes() { return holes.length; }, get started() { return started; }, get time() { return gameTime; }, mainStats, shotLog, get aim() { return { yaw, pitch, recoilP, aimT, locked }; }, set noLook(v) { testNoLook = v; },
   entities, totalTargets, houses, renderer, scene, camera,
   look(y, p) { yaw = y; pitch = p; },
   lookAt(x, y, z) { const dx = x - player.pos.x, dy = y - (player.pos.y + EYE), dz = z - player.pos.z; yaw = Math.atan2(-dx, -dz); pitch = Math.atan2(dy, Math.hypot(dx, dz)); },
